@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Send, Loader2 } from 'lucide-react';
 import MessageBubble from '@/components/MessageBubble';
 import { Badge } from '@/components/ui/badge';
+import { apiRequest } from '@/lib/queryClient';
 import aiImage from '@assets/generated_images/AI_health_assistant_visualization_24b473a7.png';
 
 export default function VirtualCompanion() {
@@ -17,7 +19,6 @@ export default function VirtualCompanion() {
     },
   ]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   const suggestedQuestions = [
@@ -35,6 +36,28 @@ export default function VirtualCompanion() {
     scrollToBottom();
   }, [messages]);
 
+  const chatMutation = useMutation({
+    mutationFn: (message) => apiRequest('POST', '/api/chat/query', { message }),
+    onSuccess: (data) => {
+      const aiMessage = {
+        id: messages.length + 1,
+        text: data.response,
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, aiMessage]);
+    },
+    onError: () => {
+      const errorMessage = {
+        id: messages.length + 1,
+        text: "I'm sorry, I'm having trouble processing your request right now. Please try again later.",
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    },
+  });
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -47,22 +70,8 @@ export default function VirtualCompanion() {
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
-    setIsLoading(true);
-
-    // TODO: Replace with actual API call
-    // const response = await chatAPI.sendQuery(input);
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMessage = {
-        id: messages.length + 2,
-        text: "Based on your recent data, your health metrics are looking good! Your average heart rate over the past week has been 72 bpm, which is within the normal range. Your sleep quality has improved by 15% compared to last month. Keep up the great work with your daily activity!",
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages(prev => [...prev, aiMessage]);
-      setIsLoading(false);
-    }, 1500);
+    
+    chatMutation.mutate(input);
   };
 
   const handleSuggestedQuestion = (question) => {
@@ -101,7 +110,7 @@ export default function VirtualCompanion() {
               timestamp={message.timestamp}
             />
           ))}
-          {isLoading && (
+          {chatMutation.isPending && (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="text-sm">Thinking...</span>
@@ -141,7 +150,7 @@ export default function VirtualCompanion() {
             />
             <Button
               onClick={handleSend}
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || chatMutation.isPending}
               size="icon"
               className="h-[60px] w-[60px]"
               data-testid="button-send"

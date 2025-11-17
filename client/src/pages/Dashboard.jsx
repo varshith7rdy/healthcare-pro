@@ -1,26 +1,34 @@
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, Heart, Moon, TrendingUp, Calendar, MessageSquare, FileText, Watch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useLocation } from 'wouter';
+import Loader from '@/components/Loader';
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
 
-  // TODO: Remove mock data - fetch from API
-  const healthMetrics = [
-    { label: 'Heart Rate', value: '72', unit: 'bpm', icon: Heart, trend: '+2%', color: 'text-red-500' },
-    { label: 'Steps Today', value: '8,247', unit: 'steps', icon: Activity, trend: '+15%', color: 'text-blue-500' },
-    { label: 'Sleep', value: '7.5', unit: 'hours', icon: Moon, trend: '+0.5h', color: 'text-purple-500' },
-    { label: 'Active Minutes', value: '45', unit: 'mins', icon: TrendingUp, trend: '+12%', color: 'text-green-500' },
-  ];
+  const { data: healthMetrics, isLoading: metricsLoading } = useQuery({
+    queryKey: ['/api/health/metrics'],
+  });
 
-  const recentActivity = [
-    { time: '2 hours ago', icon: Watch, text: 'Synced Apple Watch data', type: 'sync' },
-    { time: '5 hours ago', icon: Calendar, text: 'Upcoming appointment with Dr. Smith', type: 'appointment' },
-    { time: 'Yesterday', icon: MessageSquare, text: 'New health insights available', type: 'insight' },
-    { time: '2 days ago', icon: FileText, text: 'Lab results uploaded', type: 'record' },
-  ];
+  const { data: recentActivity, isLoading: activityLoading } = useQuery({
+    queryKey: ['/api/health/activity'],
+  });
+
+  const metricIcons = {
+    'Heart Rate': { icon: Heart, color: 'text-red-500' },
+    'Steps Today': { icon: Activity, color: 'text-blue-500' },
+    'Sleep': { icon: Moon, color: 'text-purple-500' },
+    'Active Minutes': { icon: TrendingUp, color: 'text-green-500' },
+  };
+
+  const activityIcons = {
+    sync: Watch,
+    appointment: Calendar,
+    insight: MessageSquare,
+    record: FileText,
+  };
 
   const quickActions = [
     { title: 'Sync Wearables', description: 'Update your health data', icon: Watch, url: '/wearables', color: 'bg-blue-500' },
@@ -28,6 +36,10 @@ export default function Dashboard() {
     { title: 'View Analytics', description: 'See your health trends', icon: TrendingUp, url: '/analytics', color: 'bg-purple-500' },
     { title: 'Book Appointment', description: 'Schedule a visit', icon: Calendar, url: '/appointments', color: 'bg-orange-500' },
   ];
+
+  if (metricsLoading || activityLoading) {
+    return <Loader />;
+  }
 
   return (
     <div className="space-y-8">
@@ -37,22 +49,33 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {healthMetrics.map((metric) => (
-          <Card key={metric.label} data-testid={`metric-${metric.label.toLowerCase().replace(' ', '-')}`}>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{metric.label}</CardTitle>
-              <metric.icon className={`h-5 w-5 ${metric.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{metric.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">{metric.unit}</p>
-              <div className="mt-2 flex items-center text-xs text-green-600">
-                <TrendingUp className="mr-1 h-3 w-3" />
-                {metric.trend}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {healthMetrics && healthMetrics.length > 0 ? (
+          healthMetrics.map((metric) => {
+            const config = metricIcons[metric.label] || { icon: Activity, color: 'text-gray-500' };
+            return (
+              <Card key={metric.label} data-testid={`metric-${metric.label.toLowerCase().replace(' ', '-')}`}>
+                <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{metric.label}</CardTitle>
+                  <config.icon className={`h-5 w-5 ${config.color}`} />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{metric.value}</div>
+                  <p className="text-xs text-muted-foreground mt-1">{metric.unit}</p>
+                  {metric.trend && (
+                    <div className="mt-2 flex items-center text-xs text-green-600">
+                      <TrendingUp className="mr-1 h-3 w-3" />
+                      {metric.trend}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })
+        ) : (
+          <div className="col-span-full text-center py-8 text-muted-foreground">
+            No health metrics available. Sync your devices to see data.
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -62,19 +85,26 @@ export default function Dashboard() {
             <CardDescription>Your latest health updates</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity, idx) => (
-                <div key={idx} className="flex items-start gap-4" data-testid={`activity-${idx}`}>
-                  <div className="rounded-full bg-primary/10 p-2">
-                    <activity.icon className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm">{activity.text}</p>
-                    <p className="text-xs text-muted-foreground">{activity.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {recentActivity && recentActivity.length > 0 ? (
+              <div className="space-y-4">
+                {recentActivity.map((activity, idx) => {
+                  const IconComponent = activityIcons[activity.type] || Activity;
+                  return (
+                    <div key={idx} className="flex items-start gap-4" data-testid={`activity-${idx}`}>
+                      <div className="rounded-full bg-primary/10 p-2">
+                        <IconComponent className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm">{activity.text}</p>
+                        <p className="text-xs text-muted-foreground">{activity.time}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center py-8 text-muted-foreground">No recent activity</p>
+            )}
           </CardContent>
         </Card>
 
